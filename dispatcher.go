@@ -46,14 +46,23 @@ func RoundRobin(amfId int64) (nf *backendNF) {
 		logger.DispatchLog.Errorln("There are no backend NFs running")
 		return nil
 	}
+
 	if amfId != 0 {
-		next = amfId % nfNum
-	} else if next >= nfNum {
-		next = 0
+		index := amfId % nfNum
+		if backends[index].state == true {
+			logger.DiscoveryLog.Infof("Returning same AMF for: AmfID %v backend %v, index %v", amfId, backends[index].address, index)
+			return backends[index]
+		}
+		logger.DiscoveryLog.Infof("AMF state id Dowd for: AmfID %v backend %v, next %v", amfId, backends[index].address, index)
 	}
 
 	nf = backends[next]
 	next++
+	if next >= nfNum {
+		next = 0
+	}
+
+	logger.DiscoveryLog.Infof("New AMF for: AmfID %+v backend %+v, next %v", amfId, nf.address, next)
 	return nf
 }
 
@@ -298,7 +307,7 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 		} else {
 			logger.SctpLog.Errorln("No AMF Connections")
 		}
-        ran.Log.Infof("Delete RAN Context[ID: %+v]", ran.RanID())
+		ran.Log.Infof("Delete RAN Context[ID: %+v]", ran.RanID())
 		context.Sctplb_Self().DeleteRan(conn)
 		return
 	}
