@@ -18,6 +18,7 @@ import (
 	"github.com/omec-project/sctplb/context"
 	"github.com/omec-project/sctplb/logger"
 	gClient "github.com/omec-project/sctplb/sdcoreAmfServer"
+	"github.com/omec-project/util/drsm"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
@@ -31,11 +32,25 @@ type backendNF struct {
 }
 
 var (
-	backends []*backendNF
-	nfNum    int64
-	next     int64
-	mutex    sync.Mutex
+	backends      []*backendNF
+	nfNum         int64
+	next          int64
+	mutex         sync.Mutex
+	drsmInitDone  bool = false
+	Drsm          drsm.DrsmInterface
+	redirectCount int32
 )
+
+func InitDrsm() (drsm.DrsmInterface, error) {
+	podname := os.Getenv("HOSTNAME")
+	podip := os.Getenv("POD_IP")
+	podId := drsm.PodId{PodName: podname, PodIp: podip}
+	dbUrl := "mongodb://mongodb-arbiter-headless"
+	opt := &drsm.Options{ResIdSize: 24, Mode: drsm.ResourceDemux}
+	db := drsm.DbInfo{Url: dbUrl, Name: "sdcore_amf"}
+
+	return drsm.InitDRSM("amfid", podId, db, opt)
+}
 
 // returns the backendNF using RoundRobin algorithm
 func RoundRobin(amfId int64) (nf *backendNF) {
@@ -47,13 +62,26 @@ func RoundRobin(amfId int64) (nf *backendNF) {
 		return nil
 	}
 
-	if amfId != 0 {
-		index := amfId % nfNum
-		if backends[index].state == true {
-			logger.DiscoveryLog.Infof("Returning same AMF for: AmfID %v backend %v, index %v", amfId, backends[index].address, index)
-			return backends[index]
+	if amfId != 0 && drsmInitDone {
+		var id *drsm.PodId
+		// logger.DispatchLog.Errorln("find amfid owner ", amfId)
+		id, _ = Drsm.FindOwnerInt32ID(int32(amfId))
+		if id != nil {
+			// logger.DispatchLog.Infof(" 1 found owner ", id)
+			for _, b1 := range backends {
+				if b1.state == true && b1.address == id.PodIp {
+					// logger.DispatchLog.Infof(" 2 found owner ", b1.address)
+					return b1
+				}
+			}
+		} else {
+			index := amfId % nfNum
+			if backends[index].state == true {
+				// logger.DiscoveryLog.Infof("Returning same AMF for: AmfID %v backend %v, index %v", amfId, backends[index].address, index)
+				return backends[index]
+			}
+			// logger.DiscoveryLog.Infof("AMF state id Down for: AmfID %v backend %v, next %v", amfId, backends[index].address, index)
 		}
-		logger.DiscoveryLog.Infof("AMF state id Dowd for: AmfID %v backend %v, next %v", amfId, backends[index].address, index)
 	}
 
 	nf = backends[next]
@@ -62,7 +90,7 @@ func RoundRobin(amfId int64) (nf *backendNF) {
 		next = 0
 	}
 
-	logger.DiscoveryLog.Infof("New AMF for: AmfID %+v backend %+v, next %v", amfId, nf.address, next)
+	logger.DiscoveryLog.Infof("Default round Robin: AmfID %+v backend %+v, next %v", amfId, nf.address, next)
 	return nf
 }
 
@@ -72,6 +100,11 @@ func dispatchAddServer(serviceName string) {
 	// create server outstanding message queue
 	// connect to server
 	// there can be more than 1 message outstanding toards same server
+
+	if drsmInitDone == false {
+		Drsm, _ = InitDrsm()
+		drsmInitDone = true
+	}
 
 	for {
 		logger.DiscoveryLog.Traceln("Discover Service ", serviceName)
@@ -147,13 +180,16 @@ func (b *backendNF) readFromServer() {
 	for {
 		response, err := b.stream.Recv()
 		if err != nil {
-			log.Printf("Error in Recv %v, Stop listening for this server %v ", err, b.address)
+			// log.Printf("Error in Recv %v, Stop listening for this server %v ", err, b.address)
 			b.deleteBackendNF()
 			return
 		} else {
 			if response.Msgtype == gClient.MsgType_INIT_MSG {
 				log.Printf("Init Response from Server %s server: %s", response.AmfId, response.VerboseMsg)
 			} else if response.Msgtype == gClient.MsgType_REDIRECT_MSG {
+				logger.DiscoveryLog.Infof("Redirection redirectCount: %v", redirectCount)
+				redirectCount++
+
 				var found bool
 				for _, b1 := range backends {
 					if b1.address == response.RedirectId {
@@ -187,13 +223,14 @@ func (b *backendNF) readFromServer() {
 					ran, _ = context.Sctplb_Self().RanFindByGnbIp(response.GnbIpAddr)
 					if ran != nil && response.GnbId != "" {
 						ran.SetRanId(response.GnbId)
-						log.Printf("Received GnbId: %v for GNbIpAddress: %v from NF", response.GnbId, response.GnbIpAddr)
+						// log.Printf("Received GnbId: %v for GNbIpAddress: %v from NF", response.GnbId, response.GnbIpAddr)
 					}
 				} else if response.GnbId != "" {
 					ran, _ = context.Sctplb_Self().RanFindByGnbId(response.GnbId)
 				}
 				if ran != nil {
 					ran.Conn.Write(response.Msg)
+					// log.Printf("%v sctplb-to-RAN-out", time.Now().UnixNano())
 				} else {
 					log.Printf("Couldn't fetch sctp connection with GnbId: %v", response.GnbId)
 				}
@@ -246,10 +283,10 @@ func (b *backendNF) connectToServer() {
 			if err := stream.Send(&req); err != nil {
 				log.Println("can not send: ", err)
 			}
-			log.Printf("Send Request message : %v", req)
+			// log.Printf("Send Request message : %v", req)
 			response, err := stream.Recv()
 			if err != nil {
-				log.Println("Response from server: error ", err)
+				// log.Println("Response from server: error ", err)
 				b.state = false
 			} else {
 				log.Printf("Init Response from Server %s server: %s", response.AmfId, response.VerboseMsg)
@@ -283,6 +320,8 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 		//logger.SctpLog.Warnf("Handle SCTP Notification[addr: %+v], peer %v ", conn.RemoteAddr(), peer)
 	}
 
+	start_time := time.Now()
+	// log.Printf("%v sctplb-in", start_time)
 	ran, _ := context.Sctplb_Self().RanFindByConn(conn)
 	if len(msg) == 0 {
 		logger.SctpLog.Infof("send Gnb connection [%v] close message to all AMF Instances", peer)
@@ -319,6 +358,7 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 		ran.Log.Errorf("NGAP decode error : %+v", err)
 		return
 	}
+
 	var amfId int64 = 0
 	switch pdu.Present {
 	case ngapType.NGAPPDUPresentInitiatingMessage:
@@ -390,6 +430,9 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 			if err := backend.stream.Send(&t); err != nil {
 				logger.SctpLog.Errorln("can not send: ", err)
 			}
+			end_time := time.Now()
+			diff := end_time.Sub(start_time)
+			log.Printf("%v time difference ", diff.Nanoseconds())
 			break
 		}
 	}

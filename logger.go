@@ -6,22 +6,24 @@ package main
 
 import (
 	"time"
+
 	formatter "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/sirupsen/logrus"
-
 )
 
 var (
 	logh         *logrus.Logger
-	CfgLog      *logrus.Entry
-	AppLog      *logrus.Entry
-    sctpLog     *logrus.Entry
+	CfgLog       *logrus.Entry
+	AppLog       *logrus.Entry
+	sctpLog      *logrus.Entry
 	dispatchLog  *logrus.Entry
 	discoveryLog *logrus.Entry
+	RanLog       *logrus.Entry
+	GmmLog       *logrus.Entry
 )
 
 const (
-	FieldRanAddr     string = "ran_addr"
+	FieldRanAddr string = "ran_addr"
 )
 
 func init() {
@@ -41,6 +43,8 @@ func init() {
 	sctpLog = logh.WithFields(logrus.Fields{"component": "SCTP"})
 	dispatchLog = logh.WithFields(logrus.Fields{"component": "DISPATCH"})
 	discoveryLog = logh.WithFields(logrus.Fields{"component": "discovery"})
+	RanLog = logh.WithFields(logrus.Fields{"component": "RAN"})
+	GmmLog = logh.WithFields(logrus.Fields{"component": "AMF", "category": "GMM"})
 }
 
 func SetLogLevel(level logrus.Level) {

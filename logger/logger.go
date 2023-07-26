@@ -19,10 +19,16 @@ var (
 	DispatchLog  *logrus.Entry
 	DiscoveryLog *logrus.Entry
 	RanLog       *logrus.Entry
+	GmmLog       *logrus.Entry
 )
 
 const (
-	FieldRanAddr string = "ran_addr"
+	// FieldRanAddr string = "ran_addr"
+	FieldRanAddr     string = "ran_addr"
+	FieldRanId       string = "ran_id"
+	FieldAmfUeNgapID string = "amf_ue_ngap_id"
+	FieldSupi        string = "supi"
+	FieldSuci        string = "suci"
 )
 
 func init() {
@@ -34,7 +40,8 @@ func init() {
 		TrimMessages:    true,
 		NoFieldsSpace:   true,
 		HideKeys:        true,
-		FieldsOrder:     []string{"component", "category", FieldRanAddr},
+		// FieldsOrder:     []string{"component", "category", FieldRanAddr},
+		FieldsOrder: []string{"component", "category", FieldRanAddr, FieldRanId, FieldAmfUeNgapID, FieldSupi, FieldSuci},
 	}
 
 	CfgLog = logh.WithFields(logrus.Fields{"component": "SCTP_LB", "category": "CFG"})
@@ -43,6 +50,7 @@ func init() {
 	DispatchLog = logh.WithFields(logrus.Fields{"component": "DISPATCH"})
 	DiscoveryLog = logh.WithFields(logrus.Fields{"component": "discovery"})
 	RanLog = logh.WithFields(logrus.Fields{"component": "RAN"})
+	GmmLog = logh.WithFields(logrus.Fields{"component": "AMF", "category": "GMM"})
 }
 
 func SetLogLevel(level logrus.Level) {
