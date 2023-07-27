@@ -229,7 +229,7 @@ func handleConnection(conn *sctp.SCTPConn, bufsize uint32, handler SCTPHandler) 
 				sctpLog.Tracef("Packet content:\n%+v", hex.Dump(buf[:n]))
 				ms := mystruct{buf: buf[:n], start_time: time.Now()}
 				tmpchan <- ms // buf[:n]
-				log.Printf("Incoming sctplb buffer length: %v ", len(tmpchan))
+				log.Printf("Incoming sctplb buffer length: %v %v", len(tmpchan), conn.RemoteAddr())
 			}
 		}
 	}()

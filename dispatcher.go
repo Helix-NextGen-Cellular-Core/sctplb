@@ -302,6 +302,318 @@ func (b *backendNF) connectToServer() {
 	}
 }
 
+func getAmfId(message *ngapType.NGAPPDU) *ngapType.AMFUENGAPID {
+	var aMFUENGAPID *ngapType.AMFUENGAPID
+	if message == nil {
+		logger.SctpLog.Error("NGAP Message is nil")
+		return nil
+	}
+	switch message.Present {
+	case ngapType.NGAPPDUPresentInitiatingMessage:
+		initiatingMessage := message.InitiatingMessage
+		if initiatingMessage == nil {
+			logger.SctpLog.Errorln("initiatingMessage is nil")
+			return nil
+		}
+		switch initiatingMessage.ProcedureCode.Value {
+		case ngapType.ProcedureCodeUplinkNASTransport:
+			ngapMsg := initiatingMessage.Value.UplinkNASTransport
+			if ngapMsg == nil {
+				logger.SctpLog.Error("UplinkNasTransport is nil")
+				return nil
+			}
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeHandoverCancel:
+			ngapMsg := initiatingMessage.Value.HandoverCancel
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeUEContextReleaseRequest:
+			ngapMsg := initiatingMessage.Value.UEContextReleaseRequest
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
+					if aMFUENGAPID == nil {
+						logger.SctpLog.Error("AMFUENGAPID is nil")
+						return nil
+					}
+					return aMFUENGAPID
+				}
+			}
+		case ngapType.ProcedureCodeNASNonDeliveryIndication:
+			ngapMsg := initiatingMessage.Value.NASNonDeliveryIndication
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+		case ngapType.ProcedureCodeLocationReportingFailureIndication:
+		case ngapType.ProcedureCodeErrorIndication:
+		case ngapType.ProcedureCodeUERadioCapabilityInfoIndication:
+			ngapMsg := initiatingMessage.Value.UERadioCapabilityInfoIndication
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeHandoverNotification:
+			ngapMsg := initiatingMessage.Value.HandoverNotify
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeHandoverPreparation:
+			ngapMsg := initiatingMessage.Value.HandoverRequired
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeRANConfigurationUpdate:
+		case ngapType.ProcedureCodeRRCInactiveTransitionReport:
+		case ngapType.ProcedureCodePDUSessionResourceNotify:
+			ngapMsg := initiatingMessage.Value.PDUSessionResourceNotify
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodePathSwitchRequest:
+			ngapMsg := initiatingMessage.Value.PathSwitchRequest
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDSourceAMFUENGAPID:
+					aMFUENGAPID = ie.Value.SourceAMFUENGAPID
+					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
+					if aMFUENGAPID == nil {
+						logger.SctpLog.Error("AMFUENGAPID is nil")
+						return nil
+					}
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeLocationReport:
+		case ngapType.ProcedureCodeUplinkUEAssociatedNRPPaTransport:
+		case ngapType.ProcedureCodeUplinkRANConfigurationTransfer:
+		case ngapType.ProcedureCodePDUSessionResourceModifyIndication:
+			ngapMsg := initiatingMessage.Value.PDUSessionResourceModifyIndication
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
+					if aMFUENGAPID == nil {
+						logger.SctpLog.Error("AMFUENGAPID is nil")
+						return nil
+					}
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeCellTrafficTrace:
+		case ngapType.ProcedureCodeUplinkRANStatusTransfer:
+		case ngapType.ProcedureCodeUplinkNonUEAssociatedNRPPaTransport:
+		}
+
+	case ngapType.NGAPPDUPresentSuccessfulOutcome:
+		successfulOutcome := message.SuccessfulOutcome
+		if successfulOutcome == nil {
+			logger.SctpLog.Errorln("successfulOutcome is nil")
+			return nil
+		}
+
+		switch successfulOutcome.ProcedureCode.Value {
+		case ngapType.ProcedureCodeNGReset:
+		case ngapType.ProcedureCodeUEContextRelease:
+			ngapMsg := successfulOutcome.Value.UEContextReleaseComplete
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
+					if aMFUENGAPID == nil {
+						logger.SctpLog.Error("AMFUENGAPID is nil")
+						return nil
+					}
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodePDUSessionResourceRelease:
+			ngapMsg := successfulOutcome.Value.PDUSessionResourceReleaseResponse
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeUERadioCapabilityCheck:
+		case ngapType.ProcedureCodeAMFConfigurationUpdate:
+		case ngapType.ProcedureCodeInitialContextSetup:
+			ngapMsg := successfulOutcome.Value.InitialContextSetupResponse
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeUEContextModification:
+			ngapMsg := successfulOutcome.Value.UEContextModificationResponse
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodePDUSessionResourceSetup:
+			ngapMsg := successfulOutcome.Value.PDUSessionResourceSetupResponse
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodePDUSessionResourceModify:
+			ngapMsg := successfulOutcome.Value.PDUSessionResourceModifyResponse
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeHandoverResourceAllocation:
+			ngapMsg := successfulOutcome.Value.HandoverRequestAcknowledge
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
+					if aMFUENGAPID == nil {
+						logger.SctpLog.Error("AMFUENGAPID is nil")
+						return nil
+					}
+					return aMFUENGAPID
+				}
+			}
+		}
+	case ngapType.NGAPPDUPresentUnsuccessfulOutcome:
+		unsuccessfulOutcome := message.UnsuccessfulOutcome
+		if unsuccessfulOutcome == nil {
+			logger.SctpLog.Errorln("unsuccessfulOutcome is nil")
+			return nil
+		}
+		switch unsuccessfulOutcome.ProcedureCode.Value {
+		case ngapType.ProcedureCodeAMFConfigurationUpdate:
+		case ngapType.ProcedureCodeInitialContextSetup:
+			ngapMsg := unsuccessfulOutcome.Value.InitialContextSetupFailure
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeUEContextModification:
+			ngapMsg := unsuccessfulOutcome.Value.UEContextModificationFailure
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					return aMFUENGAPID
+				}
+			}
+
+		case ngapType.ProcedureCodeHandoverResourceAllocation:
+			ngapMsg := unsuccessfulOutcome.Value.HandoverFailure
+			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
+				ie := ngapMsg.ProtocolIEs.List[i]
+				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDAMFUENGAPID:
+					aMFUENGAPID = ie.Value.AMFUENGAPID
+					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
+					if aMFUENGAPID == nil {
+						logger.SctpLog.Error("AMFUENGAPID is nil")
+						return nil
+					}
+					return aMFUENGAPID
+				}
+			}
+		}
+	}
+	return aMFUENGAPID
+}
+
 func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
 	// add this message for one of the client
 	// select server who can handle this message.. round robin
@@ -360,40 +672,45 @@ func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClie
 	}
 
 	var amfId int64 = 0
-	switch pdu.Present {
-	case ngapType.NGAPPDUPresentInitiatingMessage:
-		initiatingMessage := pdu.InitiatingMessage
-		if initiatingMessage == nil {
-			ran.Log.Errorln("Initiating Message is nil")
-			break
-		}
-		switch initiatingMessage.ProcedureCode.Value {
-		case ngapType.ProcedureCodeUplinkNASTransport:
-			uplinkNasTransport := initiatingMessage.Value.UplinkNASTransport
-			if uplinkNasTransport == nil {
-				ran.Log.Error("UplinkNasTransport is nil")
-				break
-			}
-			for i := 0; i < len(uplinkNasTransport.ProtocolIEs.List); i++ {
-				ie := uplinkNasTransport.ProtocolIEs.List[i]
-				switch ie.Id.Value {
-				case ngapType.ProtocolIEIDAMFUENGAPID:
-					var aMFUENGAPID *ngapType.AMFUENGAPID
-					aMFUENGAPID = ie.Value.AMFUENGAPID
-					ran.Log.Trace("Decode IE AmfUeNgapID")
-					if aMFUENGAPID == nil {
-						ran.Log.Error("AmfUeNgapID is nil")
-						break
-					}
-					amfId = aMFUENGAPID.Value
-					break
-				}
-				if amfId != 0 {
-					break
-				}
-			}
-		}
+	aMFUENGAPID := getAmfId(pdu)
+	if aMFUENGAPID != nil {
+		amfId = aMFUENGAPID.Value
 	}
+
+	// switch pdu.Present {
+	// case ngapType.NGAPPDUPresentInitiatingMessage:
+	// 	initiatingMessage := pdu.InitiatingMessage
+	// 	if initiatingMessage == nil {
+	// 		ran.Log.Errorln("Initiating Message is nil")
+	// 		break
+	// 	}
+	// 	switch initiatingMessage.ProcedureCode.Value {
+	// 	case ngapType.ProcedureCodeUplinkNASTransport:
+	// 		uplinkNasTransport := initiatingMessage.Value.UplinkNASTransport
+	// 		if uplinkNasTransport == nil {
+	// 			ran.Log.Error("UplinkNasTransport is nil")
+	// 			break
+	// 		}
+	// 		for i := 0; i < len(uplinkNasTransport.ProtocolIEs.List); i++ {
+	// 			ie := uplinkNasTransport.ProtocolIEs.List[i]
+	// 			switch ie.Id.Value {
+	// 			case ngapType.ProtocolIEIDAMFUENGAPID:
+	// 				var aMFUENGAPID *ngapType.AMFUENGAPID
+	// 				aMFUENGAPID = ie.Value.AMFUENGAPID
+	// 				ran.Log.Trace("Decode IE AmfUeNgapID")
+	// 				if aMFUENGAPID == nil {
+	// 					ran.Log.Error("AmfUeNgapID is nil")
+	// 					break
+	// 				}
+	// 				amfId = aMFUENGAPID.Value
+	// 				break
+	// 			}
+	// 			if amfId != 0 {
+	// 				break
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	//logger.SctpLog.Println("Message received from remoteAddr ", conn.RemoteAddr().String())
 	t := gClient.SctplbMessage{}
