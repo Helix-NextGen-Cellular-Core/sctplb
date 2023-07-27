@@ -302,7 +302,7 @@ func (b *backendNF) connectToServer() {
 	}
 }
 
-func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
+func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
 	// add this message for one of the client
 	// select server who can handle this message.. round robin
 	// add message in the server queue
@@ -320,7 +320,7 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 		//logger.SctpLog.Warnf("Handle SCTP Notification[addr: %+v], peer %v ", conn.RemoteAddr(), peer)
 	}
 
-	start_time := time.Now()
+	// start_time := time.Now()
 	// log.Printf("%v sctplb-in", start_time)
 	ran, _ := context.Sctplb_Self().RanFindByConn(conn)
 	if len(msg) == 0 {

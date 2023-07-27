@@ -7,22 +7,30 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"git.cs.nctu.edu.tw/calee/sctp"
-	"github.com/omec-project/ngap"
 	"io"
+	"log"
 	"net"
 	"sync"
 	"syscall"
+	"time"
+
+	"git.cs.nctu.edu.tw/calee/sctp"
+	"github.com/omec-project/ngap"
 )
 
 type SCTPHandler struct {
-	HandleMessage      func(conn net.Conn, msg []byte)
+	HandleMessage      func(conn net.Conn, msg []byte, start_time time.Time)
 	HandleNotification func(conn net.Conn, notification sctp.Notification)
 }
 
 type SctpConnections struct {
-	conn net.Conn
-    address string
+	conn    net.Conn
+	address string
+}
+
+type mystruct struct {
+	buf        []byte
+	start_time time.Time
 }
 
 const readBufSize uint32 = 8192
@@ -146,7 +154,7 @@ func listenAndServe(addr *sctp.SCTPAddr, handler SCTPHandler) {
 		sctpLog.Infof("[AMF] SCTP Accept from: %s", newConn.RemoteAddr().String())
 		peer := &SctpConnections{}
 		peer.conn = newConn
-        peer.address = newConn.RemoteAddr().String()
+		peer.address = newConn.RemoteAddr().String()
 		connections.Store(newConn, peer)
 
 		go handleConnection(newConn, readBufSize, handler)
@@ -165,6 +173,18 @@ func handleConnection(conn *sctp.SCTPConn, bufsize uint32, handler SCTPHandler) 
 
 	var GnbConnChan chan bool
 	GnbConnChan = make(chan bool)
+	var tmpchan chan mystruct
+	tmpchan = make(chan mystruct, 10000)
+
+	go func() {
+		for {
+			// log.Printf("before processing sctplb buffer length: %v ", len(tmpchan))
+			ms := <-tmpchan
+			// buf := <-tmpchan
+			handler.HandleMessage(conn, ms.buf, ms.start_time)
+			// log.Printf("after processing sctplb buffer length: %v ", len(tmpchan))
+		}
+	}()
 
 	go func() {
 		for {
@@ -207,8 +227,9 @@ func handleConnection(conn *sctp.SCTPConn, bufsize uint32, handler SCTPHandler) 
 
 				sctpLog.Tracef("Read %d bytes", n)
 				sctpLog.Tracef("Packet content:\n%+v", hex.Dump(buf[:n]))
-
-				handler.HandleMessage(conn, buf[:n])
+				ms := mystruct{buf: buf[:n], start_time: time.Now()}
+				tmpchan <- ms // buf[:n]
+				log.Printf("Incoming sctplb buffer length: %v ", len(tmpchan))
 			}
 		}
 	}()
@@ -218,7 +239,7 @@ func handleConnection(conn *sctp.SCTPConn, bufsize uint32, handler SCTPHandler) 
 		case x := <-GnbConnChan:
 			sctpLog.Errorln("Closing gnb Connection  ", x)
 			buf := make([]byte, bufsize)
-			handler.HandleMessage(conn, buf[:0])
+			handler.HandleMessage(conn, buf[:0], time.Now())
 			return
 		}
 	}
