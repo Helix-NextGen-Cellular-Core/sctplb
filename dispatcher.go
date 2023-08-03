@@ -614,7 +614,8 @@ func getAmfId(message *ngapType.NGAPPDU) *ngapType.AMFUENGAPID {
 	return aMFUENGAPID
 }
 
-func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
+// func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
+func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 	// add this message for one of the client
 	// select server who can handle this message.. round robin
 	// add message in the server queue
@@ -747,9 +748,9 @@ func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClie
 			if err := backend.stream.Send(&t); err != nil {
 				logger.SctpLog.Errorln("can not send: ", err)
 			}
-			end_time := time.Now()
-			diff := end_time.Sub(start_time)
-			log.Printf("%v time difference ", diff.Nanoseconds())
+			// end_time := time.Now()
+			// diff := end_time.Sub(start_time)
+			// log.Printf("%v time difference ", diff.Nanoseconds())
 			break
 		}
 	}
