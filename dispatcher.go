@@ -179,6 +179,7 @@ func (b *backendNF) deleteBackendNF() {
 func (b *backendNF) readFromServer() {
 	for {
 		response, err := b.stream.Recv()
+		start_time := time.Now()
 		if err != nil {
 			// log.Printf("Error in Recv %v, Stop listening for this server %v ", err, b.address)
 			b.deleteBackendNF()
@@ -230,7 +231,7 @@ func (b *backendNF) readFromServer() {
 				}
 				if ran != nil {
 					ran.Conn.Write(response.Msg)
-					// log.Printf("%v sctplb-to-RAN-out", time.Now().UnixNano())
+					log.Printf("T2: %v sctplb-to-RAN-out", time.Now().Sub(start_time).Nanoseconds()/1000000)
 				} else {
 					log.Printf("Couldn't fetch sctp connection with GnbId: %v", response.GnbId)
 				}
@@ -616,6 +617,8 @@ func getAmfId(message *ngapType.NGAPPDU) *ngapType.AMFUENGAPID {
 
 // func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
 func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
+	start_time := time.Now()
+	// log.Printf("%v sctplb-in", start_time)
 	// add this message for one of the client
 	// select server who can handle this message.. round robin
 	// add message in the server queue
@@ -633,8 +636,6 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 		//logger.SctpLog.Warnf("Handle SCTP Notification[addr: %+v], peer %v ", conn.RemoteAddr(), peer)
 	}
 
-	// start_time := time.Now()
-	// log.Printf("%v sctplb-in", start_time)
 	ran, _ := context.Sctplb_Self().RanFindByConn(conn)
 	if len(msg) == 0 {
 		logger.SctpLog.Infof("send Gnb connection [%v] close message to all AMF Instances", peer)
@@ -748,9 +749,8 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 			if err := backend.stream.Send(&t); err != nil {
 				logger.SctpLog.Errorln("can not send: ", err)
 			}
-			// end_time := time.Now()
-			// diff := end_time.Sub(start_time)
-			// log.Printf("%v time difference ", diff.Nanoseconds())
+
+			log.Printf("T1: %v sctplb-to-AMF time difference ", time.Now().Sub(start_time).Nanoseconds()/1000000)
 			break
 		}
 	}
