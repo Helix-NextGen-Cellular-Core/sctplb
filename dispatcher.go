@@ -45,7 +45,8 @@ func InitDrsm() (drsm.DrsmInterface, error) {
 	podname := os.Getenv("HOSTNAME")
 	podip := os.Getenv("POD_IP")
 	podId := drsm.PodId{PodName: podname, PodIp: podip}
-	dbUrl := "mongodb://mongodb-arbiter-headless"
+	// dbUrl := "mongodb://mongodb-arbiter-headless"
+	dbUrl := "mongodb://mongodb1-arbiter-headless"
 	opt := &drsm.Options{ResIdSize: 24, Mode: drsm.ResourceDemux}
 	db := drsm.DbInfo{Url: dbUrl, Name: "sdcore_amf"}
 
@@ -85,7 +86,7 @@ func RoundRobin(amfId int64) (nf *backendNF) {
 	}
 
 	nf = backends[next]
-	next++
+	// next++
 	if next >= nfNum {
 		next = 0
 	}
@@ -231,7 +232,7 @@ func (b *backendNF) readFromServer() {
 				}
 				if ran != nil {
 					ran.Conn.Write(response.Msg)
-					log.Printf("T2: %v sctplb-to-RAN-out", time.Now().Sub(start_time).Nanoseconds()/1000000)
+					log.Printf("T2: %v sctplb-to-RAN-out backend %v ", time.Now().Sub(start_time).Nanoseconds(), b.address)
 				} else {
 					log.Printf("Couldn't fetch sctp connection with GnbId: %v", response.GnbId)
 				}
@@ -615,9 +616,9 @@ func getAmfId(message *ngapType.NGAPPDU) *ngapType.AMFUENGAPID {
 	return aMFUENGAPID
 }
 
-// func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
-func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
-	start_time := time.Now()
+func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
+	// func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
+	// start_time := time.Now()
 	// log.Printf("%v sctplb-in", start_time)
 	// add this message for one of the client
 	// select server who can handle this message.. round robin
@@ -750,7 +751,7 @@ func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 				logger.SctpLog.Errorln("can not send: ", err)
 			}
 
-			log.Printf("T1: %v sctplb-to-AMF time difference ", time.Now().Sub(start_time).Nanoseconds()/1000000)
+			log.Printf("T1: %v sctplb-to-AMF time difference backend %v ", time.Now().Sub(start_time).Nanoseconds(), backend.address)
 			break
 		}
 	}
