@@ -45,8 +45,8 @@ func InitDrsm() (drsm.DrsmInterface, error) {
 	podname := os.Getenv("HOSTNAME")
 	podip := os.Getenv("POD_IP")
 	podId := drsm.PodId{PodName: podname, PodIp: podip}
-	// dbUrl := "mongodb://mongodb-arbiter-headless"
-	dbUrl := "mongodb://mongodb1-arbiter-headless"
+	dbUrl := "mongodb://mongodb-arbiter-headless"
+	// dbUrl := "mongodb://mongodb1-arbiter-headless"
 	opt := &drsm.Options{ResIdSize: 24, Mode: drsm.ResourceDemux}
 	db := drsm.DbInfo{Url: dbUrl, Name: "sdcore_amf"}
 
