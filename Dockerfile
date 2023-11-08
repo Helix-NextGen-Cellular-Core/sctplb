@@ -12,7 +12,7 @@ RUN echo "deb http://archive.debian.org/debian stretch main" > /etc/apt/sources.
 RUN apt-get update && apt-get -y install vim
 RUN cd $GOPATH/src && mkdir -p sctplb
 COPY . $GOPATH/src/sctplb
-RUN cd $GOPATH/src/sctplb && go mod tidy && go install 
+RUN cd $GOPATH/src/sctplb && make all 
 
 # FROM lb AS sctplb
 # WORKDIR /sdcore
