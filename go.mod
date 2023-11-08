@@ -2,9 +2,9 @@ module github.com/omec-project/sctplb
 
 go 1.17
 
-replace github.com/omec-project/sctplb => ./
+//replace github.com/omec-project/sctplb => ./
 
-// replace github.com/omec-project/util => ../util
+replace github.com/omec-project/util => ../util
 
 require (
 	git.cs.nctu.edu.tw/calee/sctp v1.1.0
