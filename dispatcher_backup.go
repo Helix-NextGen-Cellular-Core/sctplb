@@ -1,18 +1,22 @@
-// // SPDX-FileCopyrightText: 2022 Open Networking Foundation <info@opennetworking.org>
-// //
-// // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2022 Open Networking Foundation <info@opennetworking.org>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package main
 
 // import (
 // 	ctxt "context"
+// 	"encoding/hex"
 // 	"fmt"
 // 	"log"
+// 	"math"
 // 	"net"
 // 	"os"
+// 	"strconv"
 // 	"sync"
 // 	"time"
 
+// 	"github.com/omec-project/nas"
 // 	"github.com/omec-project/ngap"
 // 	"github.com/omec-project/ngap/ngapType"
 // 	"github.com/omec-project/sctplb/context"
@@ -32,7 +36,8 @@ package main
 // }
 
 // var (
-// 	backends      []*backendNF
+// 	// backends      []*backendNF
+// 	backends      map[*backendNF]int64
 // 	nfNum         int64
 // 	next          int64
 // 	mutex         sync.Mutex
@@ -58,7 +63,7 @@ package main
 // 	mutex.Lock()
 // 	defer mutex.Unlock()
 
-// 	if nfNum <= 0 {
+// 	if len(backends) <= 0 {
 // 		logger.DispatchLog.Errorln("There are no backend NFs running")
 // 		return nil
 // 	}
@@ -69,29 +74,38 @@ package main
 // 		id, _ = Drsm.FindOwnerInt32ID(int32(amfId))
 // 		if id != nil {
 // 			// logger.DispatchLog.Infof(" 1 found owner ", id)
-// 			for _, b1 := range backends {
+// 			for b1, _ := range backends {
 // 				if b1.state == true && b1.address == id.PodIp {
 // 					// logger.DispatchLog.Infof(" 2 found owner ", b1.address)
 // 					return b1
 // 				}
 // 			}
-// 		} else {
-// 			index := amfId % nfNum
-// 			if backends[index].state == true {
-// 				// logger.DiscoveryLog.Infof("Returning same AMF for: AmfID %v backend %v, index %v", amfId, backends[index].address, index)
-// 				return backends[index]
-// 			}
-// 			// logger.DiscoveryLog.Infof("AMF state id Down for: AmfID %v backend %v, next %v", amfId, backends[index].address, index)
+// 		}
+// 		//  else {
+// 		// 	index := amfId % nfNum
+// 		// 	if backends[index].state == true {
+// 		// 		// logger.DiscoveryLog.Infof("Returning same AMF for: AmfID %v backend %v, index %v", amfId, backends[index].address, index)
+// 		// 		return backends[index]
+// 		// 	}
+// 		// 	// logger.DiscoveryLog.Infof("AMF state id Down for: AmfID %v backend %v, next %v", amfId, backends[index].address, index)
+// 		// }
+// 	}
+
+// 	min := int64(math.MaxInt64)
+// 	for b1, count := range backends {
+// 		if min > count {
+// 			nf = b1
+// 			min = count
 // 		}
 // 	}
+// 	backends[nf]++
+// 	// nf = backends[next]
+// 	// next++
+// 	// if next >= nfNum {
+// 	// 	next = 0
+// 	// }
 
-// 	nf = backends[next]
-// 	next++
-// 	if next >= nfNum {
-// 		next = 0
-// 	}
-
-// 	logger.DiscoveryLog.Infof("Default round Robin: AmfID %+v backend %+v, next %v", amfId, nf.address, next)
+// 	logger.DiscoveryLog.Infof("Default round Robin: AmfID %+v backend %+v, next %v", amfId, nf.address, min)
 // 	return nf
 // }
 
@@ -106,6 +120,7 @@ package main
 // 		Drsm, _ = InitDrsm()
 // 		drsmInitDone = true
 // 	}
+// 	backends = make(map[*backendNF]int64)
 
 // 	for {
 // 		logger.DiscoveryLog.Traceln("Discover Service ", serviceName)
@@ -119,7 +134,8 @@ package main
 // 			logger.DiscoveryLog.Traceln("Discover Service ", serviceName, ", ip ", ip)
 // 			found := false
 // 			if ipv4 := ip.To4(); ipv4 != nil {
-// 				for _, b := range backends {
+// 				// for _, b := range backends {
+// 				for b, _ := range backends {
 // 					if b.address == ipv4.String() {
 // 						found = true
 // 						break
@@ -132,7 +148,8 @@ package main
 // 				backend := &backendNF{}
 // 				backend.address = ipv4.String()
 // 				mutex.Lock()
-// 				backends = append(backends, backend)
+// 				// backends = append(backends, backend)
+// 				backends[backend] = 0
 // 				nfNum++
 // 				mutex.Unlock()
 // 				go backend.connectToServer()
@@ -164,15 +181,18 @@ package main
 // 	mutex.Lock()
 // 	defer mutex.Unlock()
 
-// 	for i, b1 := range backends {
-// 		if b1 == b {
-// 			backends[i] = backends[len(backends)-1]
-// 			backends = backends[:len(backends)-1]
-// 			nfNum--
-// 			break
-// 		}
-// 	}
-// 	for _, b1 := range backends {
+// 	// for i, b1 := range backends {
+// 	// 	if b1 == b {
+// 	// 		backends[i] = backends[len(backends)-1]
+// 	// 		backends = backends[:len(backends)-1]
+// 	// 		nfNum--
+// 	// 		break
+// 	// 	}
+// 	// }
+// 	// for _, b1 := range backends {
+// 	delete(backends, b)
+// 	nfNum--
+// 	for b1, _ := range backends {
 // 		fmt.Println("Available backend %v ", b1)
 // 	}
 // }
@@ -193,7 +213,8 @@ package main
 // 				redirectCount++
 
 // 				var found bool
-// 				for _, b1 := range backends {
+// 				// for _, b1 := range backends {
+// 				for b1, _ := range backends {
 // 					if b1.address == response.RedirectId {
 // 						if b1.state == false {
 // 							log.Printf("backend state is not in READY state, so not forwarding redirected Msg")
@@ -305,19 +326,21 @@ package main
 // }
 
 // // func getAmfId(message *ngapType.NGAPPDU) *ngapType.AMFUENGAPID {
-// func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveGSTMSI) {
+// // func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveGSTMSI) {
+// func getAmfId(message *ngapType.NGAPPDU) int64 {
 // 	var aMFUENGAPID *ngapType.AMFUENGAPID
 // 	var fiveGSTMSI *ngapType.FiveGSTMSI
+
 // 	if message == nil {
 // 		logger.SctpLog.Error("NGAP Message is nil")
-// 		return nil, nil
+// 		return 0
 // 	}
 // 	switch message.Present {
 // 	case ngapType.NGAPPDUPresentInitiatingMessage:
 // 		initiatingMessage := message.InitiatingMessage
 // 		if initiatingMessage == nil {
 // 			logger.SctpLog.Errorln("initiatingMessage is nil")
-// 			return nil, nil
+// 			return 0
 // 		}
 // 		switch initiatingMessage.ProcedureCode.Value {
 // 		case ngapType.ProcedureCodeNGSetup:
@@ -325,23 +348,42 @@ package main
 // 			ngapMsg := initiatingMessage.Value.InitialUEMessage
 // 			if ngapMsg == nil {
 // 				logger.SctpLog.Error("UplinkNasTransport is nil")
-// 				return nil, nil
+// 				return 0
 // 			}
 // 			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
 // 				ie := ngapMsg.ProtocolIEs.List[i]
+
+// 				logger.SctpLog.Infof("initiatingMessage.Value.InitialUEMessage: ie.Id.Value %v", ie.Id.Value)
 // 				switch ie.Id.Value {
+// 				case ngapType.ProtocolIEIDNASPDU: // reject
+// 					nASPDU := ie.Value.NASPDU.Value
+// 					var guti string
+// 					msg := new(nas.Message)
+// 					msg.SecurityHeaderType = nas.GetSecurityHeaderType(nASPDU) & 0x0f
+// 					if msg.GmmHeader.GetMessageType() == nas.MsgTypeServiceRequest {
+// 						mobileIdentity5GSContents := msg.ServiceRequest.TMSI5GS.Octet
+// 						if nasMessage.MobileIdentity5GSType5gSTmsi == nasConvert.GetTypeOfIdentity(mobileIdentity5GSContents[0]) {
+// 							guti = StmsiToGuti(mobileIdentity5GSContents)
+// 							logger.SctpLog.Infof("Guti derived from Service Request Message: %v", guti)
+// 							tmsi := guti[12:]
+// 							byteToInt, _ := strconv.Atoi(tmsi)
+// 							return int64(byteToInt)
+// 						}
+// 						// ran.Log.Trace("Decode IE NasPdu")
+// 					}
 // 				case ngapType.ProtocolIEIDFiveGSTMSI: // optional, reject
 // 					fiveGSTMSI = ie.Value.FiveGSTMSI
 // 					logger.SctpLog.Error("found ie.Value.FiveGSTMSI", ie.Value.FiveGSTMSI)
-// 					return nil, fiveGSTMSI //fiveGSTMSI.AMFSetID.Value
+// 					tmsi := hex.EncodeToString(fiveGSTMSI.FiveGTMSI.Value)
+// 					byteToInt, _ := strconv.Atoi(tmsi)
+// 					return int64(byteToInt)
 // 				}
-
 // 			}
 // 		case ngapType.ProcedureCodeUplinkNASTransport:
 // 			ngapMsg := initiatingMessage.Value.UplinkNASTransport
 // 			if ngapMsg == nil {
 // 				logger.SctpLog.Error("UplinkNasTransport is nil")
-// 				return nil, nil
+// 				return 0
 // 			}
 // 			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
 // 				ie := ngapMsg.ProtocolIEs.List[i]
@@ -373,7 +415,7 @@ package main
 // 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 // 					if aMFUENGAPID == nil {
 // 						logger.SctpLog.Error("AMFUENGAPID is nil")
-// 						return nil
+// 						return 0
 // 					}
 // 					return aMFUENGAPID, nil
 // 				}
@@ -450,7 +492,7 @@ package main
 // 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 // 					if aMFUENGAPID == nil {
 // 						logger.SctpLog.Error("AMFUENGAPID is nil")
-// 						return nil
+// 						return 0
 // 					}
 // 					return aMFUENGAPID, nil
 // 				}
@@ -469,7 +511,7 @@ package main
 // 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 // 					if aMFUENGAPID == nil {
 // 						logger.SctpLog.Error("AMFUENGAPID is nil")
-// 						return nil
+// 						return 0
 // 					}
 // 					return aMFUENGAPID, nil
 // 				}
@@ -484,7 +526,7 @@ package main
 // 		successfulOutcome := message.SuccessfulOutcome
 // 		if successfulOutcome == nil {
 // 			logger.SctpLog.Errorln("successfulOutcome is nil")
-// 			return nil
+// 			return 0
 // 		}
 
 // 		switch successfulOutcome.ProcedureCode.Value {
@@ -499,7 +541,7 @@ package main
 // 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 // 					if aMFUENGAPID == nil {
 // 						logger.SctpLog.Error("AMFUENGAPID is nil")
-// 						return nil
+// 						return 0
 // 					}
 // 					return aMFUENGAPID, nil
 // 				}
@@ -577,7 +619,7 @@ package main
 // 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 // 					if aMFUENGAPID == nil {
 // 						logger.SctpLog.Error("AMFUENGAPID is nil")
-// 						return nil
+// 						return 0
 // 					}
 // 					return aMFUENGAPID, nil
 // 				}
@@ -587,7 +629,7 @@ package main
 // 		unsuccessfulOutcome := message.UnsuccessfulOutcome
 // 		if unsuccessfulOutcome == nil {
 // 			logger.SctpLog.Errorln("unsuccessfulOutcome is nil")
-// 			return nil
+// 			return 0
 // 		}
 // 		switch unsuccessfulOutcome.ProcedureCode.Value {
 // 		case ngapType.ProcedureCodeAMFConfigurationUpdate:
@@ -625,7 +667,7 @@ package main
 // 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 // 					if aMFUENGAPID == nil {
 // 						logger.SctpLog.Error("AMFUENGAPID is nil")
-// 						return nil
+// 						return 0
 // 					}
 // 					return aMFUENGAPID, nil
 // 				}
@@ -667,10 +709,12 @@ package main
 // 			t.GnbId = ran.RanId
 // 		}
 // 		t.Msg = msg
-// 		if backends != nil && len(backends) > 0 {
-// 			var i int
-// 			for ; i < len(backends); i++ {
-// 				backend := backends[i]
+// 		// if backends != nil && len(backends) > 0 {
+// 		if len(backends) > 0 {
+// 			// var i int
+// 			// for ; i < len(backends); i++ {
+// 			// 	backend := backends[i]
+// 			for backend, _ := range backends {
 // 				if backend.state == true {
 // 					if err := backend.stream.Send(&t); err != nil {
 // 						logger.SctpLog.Errorln("can not send ", err)
@@ -694,12 +738,18 @@ package main
 // 	}
 
 // 	var amfId int64 = 0
-// 	aMFUENGAPID, FiveGSTMSI := getAmfId(pdu)
+// 	aMFUENGAPID, fiveGSTMSI := getAmfId(pdu)
 // 	if aMFUENGAPID != nil {
 // 		amfId = aMFUENGAPID.Value
-// 	} else {
-// 		tmsi := hex.EncodeToString(fiveGSTMSI.FiveGTMSI.Value)
+// 	} else if fiveGSTMSI != nil {
+// 		// tmsi := hex.EncodeToString(fiveGSTMSI.FiveGTMSI.Value)
+// 		amfId, _ = strconv.ParseInt(hex.EncodeToString(fiveGSTMSI.FiveGTMSI.Value), 16, 64)
 // 	}
+// 	// var amfId int64 = 0
+// 	// aMFUENGAPID := getAmfId(pdu)
+// 	// if aMFUENGAPID != nil {
+// 	// 	amfId = aMFUENGAPID.Value
+// 	// }
 
 // 	// switch pdu.Present {
 // 	// case ngapType.NGAPPDUPresentInitiatingMessage:
@@ -767,7 +817,7 @@ package main
 // 		//          Use consistent hashing to send message to AMF which owns the hash index
 // 		//       2) NAS decoding to fetch TMSI and send message to one of the AMF using hashing or DRSM
 // 		backend := RoundRobin(amfId)
-// 		if backend.state == true {
+// 		if backend != nil && backend.state == true {
 // 			if err := backend.stream.Send(&t); err != nil {
 // 				logger.SctpLog.Errorln("can not send: ", err)
 // 			}

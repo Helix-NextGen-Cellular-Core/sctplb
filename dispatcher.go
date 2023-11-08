@@ -6,6 +6,7 @@ package main
 
 import (
 	ctxt "context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -16,6 +17,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/omec-project/nas"
+	"github.com/omec-project/nas/nasConvert"
+	"github.com/omec-project/nas/nasMessage"
 	"github.com/omec-project/ngap"
 	"github.com/omec-project/ngap/ngapType"
 	"github.com/omec-project/sctplb/context"
@@ -32,14 +36,15 @@ type backendNF struct {
 	gc      gClient.NgapServiceClient
 	state   bool
 	stream  gClient.NgapService_HandleMessageClient
+	count   int64
 }
 
 var (
 	// backends      []*backendNF
-	backends      map[*backendNF]int64
+	backends      map[string]*backendNF //map[*backendNF]int64
 	nfNum         int64
 	next          int64
-	mutex         sync.Mutex
+	mutex         sync.RWMutex
 	drsmInitDone  bool = false
 	Drsm          drsm.DrsmInterface
 	redirectCount int32
@@ -59,10 +64,12 @@ func InitDrsm() (drsm.DrsmInterface, error) {
 
 // returns the backendNF using RoundRobin algorithm
 func RoundRobin(amfId int64) (nf *backendNF) {
+	// fmt.Println("RoundRobin mutex.Lock()")
 	mutex.Lock()
 	defer mutex.Unlock()
+	// defer fmt.Println("RoundRobin mutex.Unlock()")
 
-	if nfNum <= 0 {
+	if len(backends) <= 0 {
 		logger.DispatchLog.Errorln("There are no backend NFs running")
 		return nil
 	}
@@ -73,12 +80,17 @@ func RoundRobin(amfId int64) (nf *backendNF) {
 		id, _ = Drsm.FindOwnerInt32ID(int32(amfId))
 		if id != nil {
 			// logger.DispatchLog.Infof(" 1 found owner ", id)
-			for b1, _ := range backends {
-				if b1.state == true && b1.address == id.PodIp {
-					// logger.DispatchLog.Infof(" 2 found owner ", b1.address)
-					return b1
+			if backend, ok := backends[id.PodIp]; ok {
+				if backend.state == true {
+					return backend
 				}
 			}
+			// for b1, _ := range backends {
+			// 	if b1.state == true && b1.address == id.PodIp {
+			// 		// logger.DispatchLog.Infof(" 2 found owner ", b1.address)
+			// 		return b1
+			// 	}
+			// }
 		}
 		//  else {
 		// 	index := amfId % nfNum
@@ -91,13 +103,15 @@ func RoundRobin(amfId int64) (nf *backendNF) {
 	}
 
 	min := int64(math.MaxInt64)
-	for b1, count := range backends {
-		if min > count {
-			nf = b1
-			min = count
+	for _, backend := range backends {
+		if min > backend.count {
+			nf = backend
+			min = backend.count
 		}
 	}
-	backends[nf]++
+
+	nf.count++
+
 	// nf = backends[next]
 	// next++
 	// if next >= nfNum {
@@ -119,7 +133,8 @@ func dispatchAddServer(serviceName string) {
 		Drsm, _ = InitDrsm()
 		drsmInitDone = true
 	}
-	backends = make(map[*backendNF]int64)
+	// backends = make(map[*backendNF]int64)
+	backends = make(map[string]*backendNF)
 
 	for {
 		logger.DiscoveryLog.Traceln("Discover Service ", serviceName)
@@ -131,33 +146,46 @@ func dispatchAddServer(serviceName string) {
 		}
 		for _, ip := range ips {
 			logger.DiscoveryLog.Traceln("Discover Service ", serviceName, ", ip ", ip)
-			found := false
+			// found := false
 			if ipv4 := ip.To4(); ipv4 != nil {
 				// for _, b := range backends {
-				for b, _ := range backends {
-					if b.address == ipv4.String() {
-						found = true
-						break
-					}
-				}
-				if found == true {
+				// fmt.Println("dispatchAddServer Rlock")
+				mutex.RLock()
+				if _, ok := backends[ipv4.String()]; ok {
+					mutex.RUnlock()
+					// fmt.Println("dispatchAddServer RUnlock")
 					continue
 				}
+				// for b, _ := range backends {
+				// 	if b.address == ipv4.String() {
+				// 		found = true
+				// 		break
+				// 	}
+				// }
+				// if found == true {
+				// 	continue
+				// }
+				mutex.RUnlock()
+				// fmt.Println("dispatchAddServer RUnlock")
 				logger.DiscoveryLog.Infoln("New Server found IPv4: ", ipv4.String())
 				backend := &backendNF{}
 				backend.address = ipv4.String()
+				backend.count = 0
+				// fmt.Println("dispatchAddServer Lock")
 				mutex.Lock()
 				// backends = append(backends, backend)
-				backends[backend] = 0
-				nfNum++
+				// backends[backend] = 0
+				backends[ipv4.String()] = backend
 				mutex.Unlock()
+				// fmt.Println("dispatchAddServer UnLock")
+				nfNum++
 				go backend.connectToServer()
 			}
 		}
 		time.Sleep(2 * time.Second)
 	}
-	return
 }
+
 func (b *backendNF) connectionOnState() {
 
 	go func() {
@@ -177,9 +205,8 @@ func (b *backendNF) connectionOnState() {
 }
 
 func (b *backendNF) deleteBackendNF() {
+	// fmt.Println("deleteBackendNF Lock")
 	mutex.Lock()
-	defer mutex.Unlock()
-
 	// for i, b1 := range backends {
 	// 	if b1 == b {
 	// 		backends[i] = backends[len(backends)-1]
@@ -189,17 +216,24 @@ func (b *backendNF) deleteBackendNF() {
 	// 	}
 	// }
 	// for _, b1 := range backends {
-	delete(backends, b)
+	// delete(backends, b)
+	delete(backends, b.address)
+	mutex.Unlock()
+	// fmt.Println("deleteBackendNF Unlock")
 	nfNum--
-	for b1, _ := range backends {
-		fmt.Println("Available backend %v ", b1)
+	// fmt.Println("deleteBackendNF RLock")
+	mutex.RLock()
+	for ip, b := range backends {
+		fmt.Println("Available backend %v count %v", ip, b.count)
 	}
+	mutex.RUnlock()
+	// fmt.Println("deleteBackendNF RUnlock")
 }
 
 func (b *backendNF) readFromServer() {
 	for {
 		response, err := b.stream.Recv()
-		start_time := time.Now()
+		// start_time := time.Now()
 		if err != nil {
 			// log.Printf("Error in Recv %v, Stop listening for this server %v ", err, b.address)
 			b.deleteBackendNF()
@@ -208,33 +242,36 @@ func (b *backendNF) readFromServer() {
 			if response.Msgtype == gClient.MsgType_INIT_MSG {
 				log.Printf("Init Response from Server %s server: %s", response.AmfId, response.VerboseMsg)
 			} else if response.Msgtype == gClient.MsgType_REDIRECT_MSG {
-				logger.DiscoveryLog.Infof("Redirection redirectCount: %v", redirectCount)
 				redirectCount++
-
+				logger.DiscoveryLog.Infof("Redirection redirectCount: %v", redirectCount)
 				var found bool
 				// for _, b1 := range backends {
-				for b1, _ := range backends {
-					if b1.address == response.RedirectId {
-						if b1.state == false {
-							log.Printf("backend state is not in READY state, so not forwarding redirected Msg")
-						} else {
-							t := gClient.SctplbMessage{}
-							t.VerboseMsg = "Hello From gNB Message !"
-							t.Msgtype = gClient.MsgType_GNB_MSG
-							t.SctplbId = os.Getenv("HOSTNAME")
-							t.Msg = response.Msg
-							t.GnbId = response.GnbId
-							b1.stream.Send(&t)
-							//log.Printf("successfully forwarded msg to correct AMF")
-							found = true
-						}
-						break
+				// fmt.Println("readFromServer RLock")
+				mutex.RLock()
+				// for b1, _ := range backends {
+				if b1, ok := backends[response.RedirectId]; ok {
+					// if b1.address == response.RedirectId {
+					if b1.state == false {
+						log.Printf("backend state is not in READY state, so not forwarding redirected Msg")
+					} else {
+						t := gClient.SctplbMessage{}
+						t.VerboseMsg = "Hello From gNB Message !"
+						t.Msgtype = gClient.MsgType_GNB_MSG
+						t.SctplbId = os.Getenv("HOSTNAME")
+						t.Msg = response.Msg
+						t.GnbId = response.GnbId
+						b1.stream.Send(&t)
+						//log.Printf("successfully forwarded msg to correct AMF")
+						found = true
 					}
+					// break
+					// }
 				}
+				mutex.RUnlock()
+				// fmt.Println("readFromServer RUnlock")
 				if !found {
 					log.Printf("dropping redirected message as backend ip [%v] is not exist", response.RedirectId)
 				}
-
 			} else {
 				var ran *context.Ran
 				//fetch ran connection based on GnbId
@@ -252,7 +289,7 @@ func (b *backendNF) readFromServer() {
 				}
 				if ran != nil {
 					ran.Conn.Write(response.Msg)
-					log.Printf("T2: %v sctplb-to-RAN-out backend %v ", time.Now().Sub(start_time).Nanoseconds(), b.address)
+					// log.Printf("T2: %v sctplb-to-RAN-out backend %v ", time.Now().Sub(start_time).Nanoseconds(), b.address)
 				} else {
 					log.Printf("Couldn't fetch sctp connection with GnbId: %v", response.GnbId)
 				}
@@ -325,20 +362,21 @@ func (b *backendNF) connectToServer() {
 }
 
 // func getAmfId(message *ngapType.NGAPPDU) *ngapType.AMFUENGAPID {
-func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveGSTMSI) {
+// func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveGSTMSI) {
+func getAmfId(message *ngapType.NGAPPDU) int64 {
 	var aMFUENGAPID *ngapType.AMFUENGAPID
 	var fiveGSTMSI *ngapType.FiveGSTMSI
 
 	if message == nil {
 		logger.SctpLog.Error("NGAP Message is nil")
-		return nil, nil
+		return 0
 	}
 	switch message.Present {
 	case ngapType.NGAPPDUPresentInitiatingMessage:
 		initiatingMessage := message.InitiatingMessage
 		if initiatingMessage == nil {
 			logger.SctpLog.Errorln("initiatingMessage is nil")
-			return nil, nil
+			return 0
 		}
 		switch initiatingMessage.ProcedureCode.Value {
 		case ngapType.ProcedureCodeNGSetup:
@@ -346,29 +384,75 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 			ngapMsg := initiatingMessage.Value.InitialUEMessage
 			if ngapMsg == nil {
 				logger.SctpLog.Error("UplinkNasTransport is nil")
-				return nil, nil
+				return 0
 			}
 			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
 				ie := ngapMsg.ProtocolIEs.List[i]
+
+				// logger.SctpLog.Infof("initiatingMessage.Value.InitialUEMessage: ie.Id.Value %v", ie.Id.Value)
 				switch ie.Id.Value {
+				case ngapType.ProtocolIEIDNASPDU: // reject
+					nASPDU := []byte(ie.Value.NASPDU.Value)
+
+					// logger.SctpLog.Infof("ie.Value: %v", ie.Value.NASPDU)
+					msg := new(nas.Message)
+					msg.SecurityHeaderType = nas.GetSecurityHeaderType(nASPDU) & 0x0f
+					switch msg.SecurityHeaderType {
+					case nas.SecurityHeaderTypeIntegrityProtected:
+						p := nASPDU[7:]
+						if err := msg.PlainNasDecode(&p); err != nil {
+							return 0
+						}
+					case nas.SecurityHeaderTypePlainNas:
+						// logger.CommLog.Infof("Security header type: PlainNas Message")
+						if err := msg.PlainNasDecode(&nASPDU); err != nil {
+							return 0
+						}
+					default:
+						logger.SctpLog.Infof("Security header type is not plain or integrity protected")
+						return 0
+					}
+					// logger.SctpLog.Infof("msg: %v", msg)
+					// logger.SctpLog.Infof("msg.GmmHeader: %v", msg.GmmHeader)
+
+					if msg.GmmHeader.GetMessageType() == nas.MsgTypeServiceRequest {
+						mobileIdentity5GSContents := msg.ServiceRequest.TMSI5GS.Octet
+						if nasMessage.MobileIdentity5GSType5gSTmsi == nasConvert.GetTypeOfIdentity(mobileIdentity5GSContents[0]) {
+							// guti = StmsiToGuti(mobileIdentity5GSContents)
+							// tmsi := guti[12:]
+							buf := msg.ServiceRequest.TMSI5GS.Octet
+							// tmsi5G := hex.EncodeToString(buf[3:])
+							// logger.SctpLog.Infof("tmsi5G derived from Service Request Message: %v", tmsi5G)
+							// byteToInt, _ := strconv.Atoi(buf[3:])
+							byteToInt := binary.BigEndian.Uint32(buf[3:])
+							// logger.SctpLog.Infof("tmsi5G derived from Service Request Message (int): %v", byteToInt)
+							return int64(byteToInt)
+						}
+						// ran.Log.Trace("Decode IE NasPdu")
+					}
+					//  else {
+					// 	logger.SctpLog.Infof("msg.GmmHeader is not MsgTypeServiceRequest")
+					// }
 				case ngapType.ProtocolIEIDFiveGSTMSI: // optional, reject
 					fiveGSTMSI = ie.Value.FiveGSTMSI
-					logger.SctpLog.Error("found ie.Value.FiveGSTMSI", ie.Value.FiveGSTMSI)
-					return nil, fiveGSTMSI //fiveGSTMSI.AMFSetID.Value
+					logger.SctpLog.Infof("found ie.Value.FiveGSTMSI", ie.Value.FiveGSTMSI)
+					tmsi := hex.EncodeToString(fiveGSTMSI.FiveGTMSI.Value)
+					byteToInt, _ := strconv.Atoi(tmsi)
+					return int64(byteToInt)
 				}
 			}
 		case ngapType.ProcedureCodeUplinkNASTransport:
 			ngapMsg := initiatingMessage.Value.UplinkNASTransport
 			if ngapMsg == nil {
 				logger.SctpLog.Error("UplinkNasTransport is nil")
-				return nil, nil
+				return 0
 			}
 			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
 				ie := ngapMsg.ProtocolIEs.List[i]
 				switch ie.Id.Value {
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -379,7 +463,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 				switch ie.Id.Value {
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -393,9 +477,9 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 					if aMFUENGAPID == nil {
 						logger.SctpLog.Error("AMFUENGAPID is nil")
-						return nil, nil
+						return 0
 					}
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 		case ngapType.ProcedureCodeNASNonDeliveryIndication:
@@ -405,7 +489,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 				switch ie.Id.Value {
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 		case ngapType.ProcedureCodeLocationReportingFailureIndication:
@@ -418,7 +502,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -430,7 +514,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -442,7 +526,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -456,7 +540,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -470,9 +554,9 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 					if aMFUENGAPID == nil {
 						logger.SctpLog.Error("AMFUENGAPID is nil")
-						return nil, nil
+						return 0
 					}
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -489,9 +573,9 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 					if aMFUENGAPID == nil {
 						logger.SctpLog.Error("AMFUENGAPID is nil")
-						return nil, nil
+						return 0
 					}
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -504,7 +588,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 		successfulOutcome := message.SuccessfulOutcome
 		if successfulOutcome == nil {
 			logger.SctpLog.Errorln("successfulOutcome is nil")
-			return nil, nil
+			return 0
 		}
 
 		switch successfulOutcome.ProcedureCode.Value {
@@ -519,9 +603,9 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 					if aMFUENGAPID == nil {
 						logger.SctpLog.Error("AMFUENGAPID is nil")
-						return nil, nil
+						return 0
 					}
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -533,7 +617,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -547,7 +631,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -559,7 +643,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -571,7 +655,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -583,7 +667,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -597,9 +681,9 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 					if aMFUENGAPID == nil {
 						logger.SctpLog.Error("AMFUENGAPID is nil")
-						return nil, nil
+						return 0
 					}
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 		}
@@ -607,7 +691,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 		unsuccessfulOutcome := message.UnsuccessfulOutcome
 		if unsuccessfulOutcome == nil {
 			logger.SctpLog.Errorln("unsuccessfulOutcome is nil")
-			return nil, nil
+			return 0
 		}
 		switch unsuccessfulOutcome.ProcedureCode.Value {
 		case ngapType.ProcedureCodeAMFConfigurationUpdate:
@@ -619,7 +703,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -631,7 +715,7 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 
 				case ngapType.ProtocolIEIDAMFUENGAPID:
 					aMFUENGAPID = ie.Value.AMFUENGAPID
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 
@@ -645,14 +729,14 @@ func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveG
 					logger.SctpLog.Trace("Decode IE AmfUeNgapID")
 					if aMFUENGAPID == nil {
 						logger.SctpLog.Error("AMFUENGAPID is nil")
-						return nil, nil
+						return 0
 					}
-					return aMFUENGAPID, nil
+					return aMFUENGAPID.Value
 				}
 			}
 		}
 	}
-	return aMFUENGAPID, nil
+	return 0
 }
 
 func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
@@ -692,13 +776,17 @@ func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClie
 			// var i int
 			// for ; i < len(backends); i++ {
 			// 	backend := backends[i]
-			for backend, _ := range backends {
+			// fmt.Println("dispatchMessage RLock")
+			mutex.RLock()
+			for _, backend := range backends {
 				if backend.state == true {
 					if err := backend.stream.Send(&t); err != nil {
 						logger.SctpLog.Errorln("can not send ", err)
 					}
 				}
 			}
+			mutex.RUnlock()
+			// fmt.Println("dispatchMessage RUnlock")
 		} else {
 			logger.SctpLog.Errorln("No AMF Connections")
 		}
@@ -716,55 +804,10 @@ func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClie
 	}
 
 	var amfId int64 = 0
-	aMFUENGAPID, fiveGSTMSI := getAmfId(pdu)
-	if aMFUENGAPID != nil {
-		amfId = aMFUENGAPID.Value
-	} else if fiveGSTMSI != nil {
-		// tmsi := hex.EncodeToString(fiveGSTMSI.FiveGTMSI.Value)
-		amfId, _ = strconv.ParseInt(hex.EncodeToString(fiveGSTMSI.FiveGTMSI.Value), 16, 64)
-	}
-	// var amfId int64 = 0
-	// aMFUENGAPID := getAmfId(pdu)
-	// if aMFUENGAPID != nil {
-	// 	amfId = aMFUENGAPID.Value
-	// }
+	// aMFUENGAPID, fiveGSTMSI := getAmfId(pdu)
+	amfId = getAmfId(pdu)
 
-	// switch pdu.Present {
-	// case ngapType.NGAPPDUPresentInitiatingMessage:
-	// 	initiatingMessage := pdu.InitiatingMessage
-	// 	if initiatingMessage == nil {
-	// 		ran.Log.Errorln("Initiating Message is nil")
-	// 		break
-	// 	}
-	// 	switch initiatingMessage.ProcedureCode.Value {
-	// 	case ngapType.ProcedureCodeUplinkNASTransport:
-	// 		uplinkNasTransport := initiatingMessage.Value.UplinkNASTransport
-	// 		if uplinkNasTransport == nil {
-	// 			ran.Log.Error("UplinkNasTransport is nil")
-	// 			break
-	// 		}
-	// 		for i := 0; i < len(uplinkNasTransport.ProtocolIEs.List); i++ {
-	// 			ie := uplinkNasTransport.ProtocolIEs.List[i]
-	// 			switch ie.Id.Value {
-	// 			case ngapType.ProtocolIEIDAMFUENGAPID:
-	// 				var aMFUENGAPID *ngapType.AMFUENGAPID
-	// 				aMFUENGAPID = ie.Value.AMFUENGAPID
-	// 				ran.Log.Trace("Decode IE AmfUeNgapID")
-	// 				if aMFUENGAPID == nil {
-	// 					ran.Log.Error("AmfUeNgapID is nil")
-	// 					break
-	// 				}
-	// 				amfId = aMFUENGAPID.Value
-	// 				break
-	// 			}
-	// 			if amfId != 0 {
-	// 				break
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	//logger.SctpLog.Println("Message received from remoteAddr ", conn.RemoteAddr().String())
+	// logger.SctpLog.Println("Message received from remoteAddr ", conn.RemoteAddr().String())
 	t := gClient.SctplbMessage{}
 	t.VerboseMsg = "Hello From gNB Message !"
 	t.Msgtype = gClient.MsgType_GNB_MSG
@@ -800,7 +843,7 @@ func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClie
 				logger.SctpLog.Errorln("can not send: ", err)
 			}
 
-			log.Printf("T1: %v sctplb-to-AMF time difference backend %v ", time.Now().Sub(start_time).Nanoseconds(), backend.address)
+			// log.Printf("T1: %v sctplb-to-AMF time difference backend %v ", time.Now().Sub(start_time).Nanoseconds(), backend.address)
 			break
 		}
 	}
