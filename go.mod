@@ -1,8 +1,8 @@
 module github.com/omec-project/sctplb
 
-go 1.17
+go 1.18
 
-//replace github.com/omec-project/sctplb => ./
+// replace github.com/omec-project/sctplb => ./
 
 replace github.com/omec-project/util => ../util
 
@@ -10,17 +10,14 @@ require (
 	git.cs.nctu.edu.tw/calee/sctp v1.1.0
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
 	github.com/omec-project/ngap v1.1.0
-	// github.com/omec-project/util v1.0.11
+	github.com/omec-project/util v1.0.11
 	github.com/sirupsen/logrus v1.9.0
 	google.golang.org/grpc v1.48.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-require (
-	github.com/omec-project/nas v1.1.4
-	github.com/omec-project/util v1.0.11
-)
+require github.com/omec-project/nas v1.1.4
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect

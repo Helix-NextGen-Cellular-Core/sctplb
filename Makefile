@@ -4,23 +4,23 @@
 #
 
 PROJECT_NAME             := sctplb
-VERSION                  ?= $(shell cat ./VERSION)
+DOCKER_VERSION                  ?= $(shell cat ./VERSION)
 
 ## Docker related
 DOCKER_REGISTRY          ?=
 DOCKER_REPOSITORY        ?=
-DOCKER_TAG               ?= ${VERSION}
+DOCKER_TAG               ?= ${DOCKER_VERSION}
 DOCKER_IMAGENAME         := ${DOCKER_REGISTRY}${DOCKER_REPOSITORY}${PROJECT_NAME}:${DOCKER_TAG}
 DOCKER_BUILDKIT          ?= 1
 DOCKER_BUILD_ARGS        ?=
 
 ## Docker labels. Only set ref and commit date if committed
-#DOCKER_LABEL_VCS_URL     ?= $(shell git remote get-url $(shell git remote))
-#DOCKER_LABEL_VCS_REF     ?= $(shell git diff-index --quiet HEAD -- && git rev-parse HEAD || echo "unknown")
-#DOCKER_LABEL_COMMIT_DATE ?= $(shell git diff-index --quiet HEAD -- && git show -s --format=%cd --date=iso-strict HEAD || echo "unknown" )
+DOCKER_LABEL_VCS_URL     ?= $(shell git remote get-url $(shell git remote))
+DOCKER_LABEL_VCS_REF     ?= $(shell git diff-index --quiet HEAD -- && git rev-parse HEAD || echo "unknown")
+DOCKER_LABEL_COMMIT_DATE ?= $(shell git diff-index --quiet HEAD -- && git show -s --format=%cd --date=iso-strict HEAD || echo "unknown" )
 DOCKER_LABEL_BUILD_DATE  ?= $(shell date -u "+%Y-%m-%dT%H:%M:%SZ")
 
-DOCKER_TARGETS           ?= lb sctplb
+DOCKER_TARGETS           ?= builder sctplb
 
 GO_BIN_PATH = bin
 GO_SRC_PATH = ./
@@ -52,6 +52,7 @@ $(GO_BIN_PATH)/%: %.go $(NF_GO_FILES)
 	@echo "Start building $(@F)...."
 	cd $(GO_SRC_PATH)/ && \
 	CGO_ENABLED=0 go build -o $(ROOT_PATH)/$@ $(@F).go service.go dispatcher.go logger.go
+# CGO_ENABLED=0 go build -o $(ROOT_PATH)/$@ $(@F).go
 
 vpath %.go $(addprefix $(GO_SRC_PATH)/, $(GO_NF))
 
@@ -80,8 +81,7 @@ docker-build:
 			. \
 			|| exit 1; \
 	done
-# rm -rf vendor
-
+	rm -rf vendor
 
 docker-push:
 	for target in $(DOCKER_TARGETS); do \
