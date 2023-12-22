@@ -748,8 +748,8 @@ func getAmfId(message *ngapType.NGAPPDU) int64 {
 	return 0
 }
 
-func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
-	// func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
+// func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
+func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
 	// start_time := time.Now()
 	// log.Printf("%v sctplb-in", start_time)
 	// add this message for one of the client
