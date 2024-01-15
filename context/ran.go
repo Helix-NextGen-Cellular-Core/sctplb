@@ -49,6 +49,7 @@ func (context *SctplbContext) NewRan(conn net.Conn) *Ran {
 	ran := Ran{}
 	ran.Conn = conn
 	ran.GnbIp = conn.RemoteAddr().String()
+	context.RanPool.Store(ran.GnbIp, &ran)
 	ran.Log = logger.RanLog.WithField(logger.FieldRanAddr, conn.RemoteAddr().String())
 	ran.Log.Infof("Add RAN Context[ID: %+v]", ran.RanID())
 	context.RanPool.Store(conn, &ran)
@@ -65,28 +66,35 @@ func (context *SctplbContext) RanFindByConn(conn net.Conn) (*Ran, bool) {
 
 // get Ran using RanId
 func (context *SctplbContext) RanFindByGnbId(gnbId string) (ran *Ran, ok bool) {
-	context.RanPool.Range(func(key, value interface{}) bool {
-		candidate := value.(*Ran)
-		if ok = (candidate.RanId == gnbId); ok {
-			ran = candidate
-			return false
-		}
-		return true
-	})
+	if value, ok := context.RanPool.Load(gnbId); ok {
+		return value.(*Ran), ok
+	}
+	// context.RanPool.Range(func(key, value interface{}) bool {
+	// 	candidate := value.(*Ran)
+	// 	if ok = (candidate.RanId == gnbId); ok {
+	// 		ran = candidate
+	// 		return false
+	// 	}
+	// 	return true
+	// })
 	return
 }
 
 // get Ran using GnbIp
 func (context *SctplbContext) RanFindByGnbIp(gnbIp string) (ran *Ran, ok bool) {
-	context.RanPool.Range(func(key, value interface{}) bool {
-		candidate := value.(*Ran)
-		if ok = (candidate.GnbIp == gnbIp); ok {
-			ran = candidate
-			return false
-		}
-		return true
-	})
-	return
+	if value, ok := context.RanPool.Load(gnbIp); ok {
+		return value.(*Ran), ok
+	}
+	return nil, false
+	// context.RanPool.Range(func(key, value interface{}) bool {
+	// 	candidate := value.(*Ran)
+	// 	if ok = (candidate.GnbIp == gnbIp); ok {
+	// 		ran = candidate
+	// 		return false
+	// 	}
+	// 	return true
+	// })
+	// return
 }
 
 func (context *SctplbContext) DeleteRan(conn net.Conn) {
