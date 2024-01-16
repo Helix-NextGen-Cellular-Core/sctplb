@@ -212,8 +212,12 @@ func (b *backendNF) deleteBackendNF() {
 	// }
 	// for _, b1 := range backends {
 	// delete(backends, b)
-	delete(backends, b.address)
-	nfNum--
+	// b.sendStreamLock.Lock()
+	if _, ok := backends[b.address]; ok {
+		delete(backends, b.address)
+		nfNum--
+	}
+	// b.sendStreamLock.Unlock()
 	backendsMutex.Unlock()
 	logger.DiscoveryLog.Warnln("remaining backends ", len(backends), " nfNum: ", nfNum, " backends: ", backends)
 	// fmt.Println("deleteBackendNF Unlock")
