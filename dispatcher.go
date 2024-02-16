@@ -43,7 +43,8 @@ type backendNF struct {
 
 var (
 	// backends      []*backendNF
-	backends      map[string]*backendNF //map[*backendNF]int64
+	backends map[string]*backendNF //map[*backendNF]int64
+	// backendsArray []*backendNF
 	nfNum         int64
 	backendsMutex sync.RWMutex
 	drsmInitDone  bool = false
@@ -96,6 +97,21 @@ func MinLogic(amfId int64) (nf *backendNF) {
 			min = backend.count
 		}
 	}
+	// min := int64(0)
+	// if backendsArray[0].count < 40 {
+	// 	nf = backendsArray[0]
+	// 	min = backendsArray[0].count
+	// } else if backendsArray[1].count < 32 {
+	// 	nf = backendsArray[1]
+	// 	min = backendsArray[1].count
+	// } else if backendsArray[2].count < 32 {
+	// 	nf = backendsArray[2]
+	// 	min = backendsArray[2].count
+	// } else if backendsArray[3].count < 32 {
+	// 	nf = backendsArray[3]
+	// 	min = backendsArray[3].count
+	// }
+
 	backendsMutex.RUnlock()
 	nf.countLock.Lock()
 	nf.count++
@@ -162,12 +178,12 @@ func dispatchAddServer(serviceName string) {
 				backend.address = ipv4.String()
 				backend.count = 0
 				// logger.ConsumerLog.Warnln("dispatchAddServer Lock")
-				backendsMutex.Lock()
-				// backends = append(backends, backend)
-				// backends[backend] = 0
-				backends[ipv4.String()] = backend
-				nfNum++
-				backendsMutex.Unlock()
+				// backendsMutex.Lock()
+				// // backends = append(backends, backend)
+				// // backends[backend] = 0
+				// backends[ipv4.String()] = backend
+				// nfNum++
+				// backendsMutex.Unlock()
 				logger.DiscoveryLog.Infoln("New Server found IPv4: ", ipv4.String(), "backends: ", len(backends), " nfNum: ", nfNum)
 				logger.DiscoveryLog.Infoln("backends: ", backends)
 				// logger.ConsumerLog.Warnln("dispatchAddServer UnLock")
@@ -201,7 +217,20 @@ func (b *backendNF) connectionOnState() {
 func (b *backendNF) deleteBackendNF() {
 	// logger.DiscoveryLog.Warnln("deleteBackendNF Lock")
 	logger.DiscoveryLog.Warnln("deleting backend ", b.address, " count: ", b.count)
-	backendsMutex.Lock()
+	b.state = false
+	go func() {
+		time.Sleep(2 * time.Second)
+		backendsMutex.Lock()
+		if _, ok := backends[b.address]; ok {
+			delete(backends, b.address)
+			nfNum--
+		}
+		// b.sendStreamLock.Unlock()
+		backendsMutex.Unlock()
+		logger.DiscoveryLog.Warnln("remaining backends ", len(backends), " nfNum: ", nfNum, " backends: ", backends)
+
+	}()
+
 	// for i, b1 := range backends {
 	// 	if b1 == b {
 	// 		backends[i] = backends[len(backends)-1]
@@ -213,13 +242,13 @@ func (b *backendNF) deleteBackendNF() {
 	// for _, b1 := range backends {
 	// delete(backends, b)
 	// b.sendStreamLock.Lock()
-	if _, ok := backends[b.address]; ok {
-		delete(backends, b.address)
-		nfNum--
-	}
-	// b.sendStreamLock.Unlock()
-	backendsMutex.Unlock()
-	logger.DiscoveryLog.Warnln("remaining backends ", len(backends), " nfNum: ", nfNum, " backends: ", backends)
+	// if _, ok := backends[b.address]; ok {
+	// 	delete(backends, b.address)
+	// 	nfNum--
+	// }
+	// // b.sendStreamLock.Unlock()
+	// backendsMutex.Unlock()
+	// logger.DiscoveryLog.Warnln("remaining backends ", len(backends), " nfNum: ", nfNum, " backends: ", backends)
 	// fmt.Println("deleteBackendNF Unlock")
 	// fmt.Println("deleteBackendNF RLock")
 	// mutex.RLock()
@@ -231,6 +260,12 @@ func (b *backendNF) deleteBackendNF() {
 }
 
 func (b *backendNF) readFromServer() {
+	backendsMutex.Lock()
+	backends[b.address] = b
+	nfNum++
+	// backendsArray = append(backendsArray, b)
+	backendsMutex.Unlock()
+
 	for {
 		response, err := b.stream.Recv()
 		// start_time := time.Now()
