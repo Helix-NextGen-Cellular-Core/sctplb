@@ -44,7 +44,7 @@ type backendNF struct {
 var (
 	// backends      []*backendNF
 	backends map[string]*backendNF //map[*backendNF]int64
-	// backendsArray []*backendNF
+	backendsArray []*backendNF
 	nfNum         int64
 	backendsMutex sync.RWMutex
 	drsmInitDone  bool = false
@@ -263,7 +263,7 @@ func (b *backendNF) readFromServer() {
 	backendsMutex.Lock()
 	backends[b.address] = b
 	nfNum++
-	// backendsArray = append(backendsArray, b)
+	backendsArray = append(backendsArray, b)
 	backendsMutex.Unlock()
 
 	for {
