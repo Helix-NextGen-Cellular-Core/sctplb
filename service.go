@@ -135,15 +135,6 @@ func listenAndServe(addr *sctp.SCTPAddr, handler SCTPHandler) {
 		// NOTE: We have already set this value to 32MB on system wide level using sysctl
 		// TODO: check for default size of 32 MB, if not then set it/stop the server
 		//
-		// if err := newConn.SetReadBuffer(int(readBufSize)); err != nil {
-		// 	sctpLog.Errorf("Set read buffer error: %+v, accept failed", err)
-		// 	if err = newConn.Close(); err != nil {
-		// 		sctpLog.Errorf("Close error: %+v", err)
-		// 	}
-		// 	continue
-		// } else {
-		// 	sctpLog.Debugf("Set read buffer to %d bytes", readBufSize)
-		// }
 
 		if err := newConn.SetReadTimeout(readTimeout); err != nil {
 			sctpLog.Errorf("Set read timeout error: %+v, accept failed", err)
@@ -179,18 +170,12 @@ func handleConnection(conn *sctp.SCTPConn, bufsize uint32, handler SCTPHandler) 
 	GnbConnChan = make(chan bool)
 
 	handleMessageChan := make(chan message, 10000)
-	// for i := 1; i < 25; i++ {
 	go func() {
 		for {
-			// log.Printf("before processing sctplb buffer length: %v ", len(tmpchan))
 			ms := <-handleMessageChan
 			handler.HandleMessage(conn, ms.buf, ms.ran)
-			// buf := <-tmpchan
-			// handler.HandleMessage(conn, ms.buf, ms.start_time)
-			// log.Printf("after processing sctplb buffer length: %v ", len(tmpchan))
 		}
 	}()
-	// }
 
 	ran, _ := context.Sctplb_Self().RanFindByConn(conn)
 	if ran == nil {
@@ -238,14 +223,9 @@ func handleConnection(conn *sctp.SCTPConn, bufsize uint32, handler SCTPHandler) 
 
 				sctpLog.Tracef("Read %d bytes", n)
 				sctpLog.Tracef("Packet content:\n%+v", hex.Dump(buf[:n]))
-				// handler.HandleMessage(conn, buf[:n])
 
-				// ms := mystruct{buf: buf[:n], start_time: time.Now()}
 				ms := message{buf: buf[:n], ran: ran}
-				handleMessageChan <- ms // buf[:n]
-				// if len(tmpchan) > 50 {
-				// 	log.Printf("Incoming sctplb buffer length: %v %v", len(tmpchan), conn.RemoteAddr())
-				// }
+				handleMessageChan <- ms
 			}
 		}
 	}()
@@ -256,7 +236,6 @@ func handleConnection(conn *sctp.SCTPConn, bufsize uint32, handler SCTPHandler) 
 			sctpLog.Errorln("Closing gnb Connection  ", x)
 			buf := make([]byte, bufsize)
 			handler.HandleMessage(conn, buf[:0], ran)
-			// handler.HandleMessage(conn, buf[:0], time.Now())
 			return
 		}
 	}

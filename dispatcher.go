@@ -57,11 +57,10 @@ func InitDrsm() (drsm.DrsmInterface, error) {
 	podip := os.Getenv("POD_IP")
 	podId := drsm.PodId{PodName: podname, PodIp: podip}
 	dbUrl := "mongodb://mongodb-arbiter-headless"
-	// dbUrl := "mongodb://mongodb1-arbiter-headless"
 	opt := &drsm.Options{ResIdSize: 24, Mode: drsm.ResourceDemux}
 	db := drsm.DbInfo{Url: dbUrl, Name: "sdcore_amf"}
 
-	return drsm.InitDRSM("amfid", podId, db, opt, 0) // 0 = default keepalive (5 s)
+	return drsm.InitDRSM("amfid", podId, db, opt, 0)
 }
 
 // returns the backendNF using RoundRobin algorithm
@@ -74,7 +73,6 @@ func MinLogic(amfId int64) (nf *backendNF) {
 
 	if amfId != 0 && drsmInitDone {
 		var id *drsm.PodId
-		// logger.DispatchLog.Errorln("find amfid owner ", amfId)
 		id, _ = Drsm.FindOwnerInt32ID(int32(amfId))
 		if id != nil {
 			backendsMutex.RLock()
@@ -97,31 +95,12 @@ func MinLogic(amfId int64) (nf *backendNF) {
 			min = backend.count
 		}
 	}
-	// min := int64(0)
-	// if backendsArray[0].count < 40 {
-	// 	nf = backendsArray[0]
-	// 	min = backendsArray[0].count
-	// } else if backendsArray[1].count < 32 {
-	// 	nf = backendsArray[1]
-	// 	min = backendsArray[1].count
-	// } else if backendsArray[2].count < 32 {
-	// 	nf = backendsArray[2]
-	// 	min = backendsArray[2].count
-	// } else if backendsArray[3].count < 32 {
-	// 	nf = backendsArray[3]
-	// 	min = backendsArray[3].count
-	// }
 
 	backendsMutex.RUnlock()
 	nf.countLock.Lock()
 	nf.count++
 	nf.countLock.Unlock()
 
-	// nf = backends[next]
-	// next++
-	// if next >= nfNum {
-	// 	next = 0
-	// }
 
 	logger.DiscoveryLog.Infof("Default round Robin: AmfID %+v backend %+v, next %v", amfId, nf.address, min)
 	return nf
@@ -138,7 +117,6 @@ func dispatchAddServer(serviceName string) {
 		Drsm, _ = InitDrsm()
 		drsmInitDone = true
 	}
-	// backends = make(map[*backendNF]int64)
 	backends = make(map[string]*backendNF)
 
 	for {
@@ -150,47 +128,23 @@ func dispatchAddServer(serviceName string) {
 			continue
 		}
 
-		// mutex.Lock()
 		for _, ip := range ips {
 			logger.DiscoveryLog.Traceln("Discover Service ", serviceName, ", ip ", ip)
-			// found := false
 			if ipv4 := ip.To4(); ipv4 != nil {
-				// for _, b := range backends {
-				// logger.ConsumerLog.Warnln("dispatchAddServer Rlock")
 				backendsMutex.RLock()
 				if _, ok := backends[ipv4.String()]; ok {
 					backendsMutex.RUnlock()
-					// logger.ConsumerLog.Warnln("dispatchAddServer RUnlock")
 					continue
 				}
-				// for b, _ := range backends {
-				// 	if b.address == ipv4.String() {
-				// 		found = true
-				// 		break
-				// 	}
-				// }
-				// if found == true {
-				// 	continue
-				// }
 				backendsMutex.RUnlock()
-				// logger.ConsumerLog.Warnln("dispatchAddServer RUnlock")
 				backend := &backendNF{}
 				backend.address = ipv4.String()
 				backend.count = 0
-				// logger.ConsumerLog.Warnln("dispatchAddServer Lock")
-				// backendsMutex.Lock()
-				// // backends = append(backends, backend)
-				// // backends[backend] = 0
-				// backends[ipv4.String()] = backend
-				// nfNum++
-				// backendsMutex.Unlock()
 				logger.DiscoveryLog.Infoln("New Server found IPv4: ", ipv4.String(), "backends: ", len(backends), " nfNum: ", nfNum)
 				logger.DiscoveryLog.Infoln("backends: ", backends)
-				// logger.ConsumerLog.Warnln("dispatchAddServer UnLock")
 				go backend.connectToServer()
 			}
 		}
-		// mutex.Unlock()
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -215,7 +169,6 @@ func (b *backendNF) connectionOnState() {
 }
 
 func (b *backendNF) deleteBackendNF() {
-	// logger.DiscoveryLog.Warnln("deleteBackendNF Lock")
 	logger.DiscoveryLog.Warnln("deleting backend ", b.address, " count: ", b.count)
 	b.state = false
 	go func() {
@@ -225,38 +178,11 @@ func (b *backendNF) deleteBackendNF() {
 			delete(backends, b.address)
 			nfNum--
 		}
-		// b.sendStreamLock.Unlock()
 		backendsMutex.Unlock()
 		logger.DiscoveryLog.Warnln("remaining backends ", len(backends), " nfNum: ", nfNum, " backends: ", backends)
 
 	}()
 
-	// for i, b1 := range backends {
-	// 	if b1 == b {
-	// 		backends[i] = backends[len(backends)-1]
-	// 		backends = backends[:len(backends)-1]
-	// 		nfNum--
-	// 		break
-	// 	}
-	// }
-	// for _, b1 := range backends {
-	// delete(backends, b)
-	// b.sendStreamLock.Lock()
-	// if _, ok := backends[b.address]; ok {
-	// 	delete(backends, b.address)
-	// 	nfNum--
-	// }
-	// // b.sendStreamLock.Unlock()
-	// backendsMutex.Unlock()
-	// logger.DiscoveryLog.Warnln("remaining backends ", len(backends), " nfNum: ", nfNum, " backends: ", backends)
-	// fmt.Println("deleteBackendNF Unlock")
-	// fmt.Println("deleteBackendNF RLock")
-	// mutex.RLock()
-	// for ip, b := range backends {
-	// 	logger.DiscoveryLog.Warnln("Available backend %v count %v", ip, b.count)
-	// }
-	// mutex.RUnlock()
-	// fmt.Println("deleteBackendNF RUnlock")
 }
 
 func (b *backendNF) readFromServer() {
@@ -268,7 +194,6 @@ func (b *backendNF) readFromServer() {
 
 	for {
 		response, err := b.stream.Recv()
-		// start_time := time.Now()
 		if err != nil {
 			log.Printf("Error in Recv %v, Stop listening for this server %v ", err, b.address)
 			b.deleteBackendNF()
@@ -280,12 +205,8 @@ func (b *backendNF) readFromServer() {
 				redirectCount++
 				logger.DiscoveryLog.Infof("Redirection redirectCount: %v", redirectCount)
 				var found bool
-				// for _, b1 := range backends {
-				// fmt.Println("readFromServer RLock")
 				backendsMutex.RLock()
-				// for b1, _ := range backends {
 				if b1, ok := backends[response.RedirectId]; ok {
-					// if b1.address == response.RedirectId {
 					if b1.state == false {
 						log.Printf("backend state is not in READY state, so not forwarding redirected Msg")
 					} else {
@@ -296,14 +217,10 @@ func (b *backendNF) readFromServer() {
 						t.Msg = response.Msg
 						t.GnbId = response.GnbId
 						b1.stream.Send(&t)
-						//log.Printf("successfully forwarded msg to correct AMF")
 						found = true
 					}
-					// break
-					// }
 				}
 				backendsMutex.RUnlock()
-				// fmt.Println("readFromServer RUnlock")
 				if !found {
 					log.Printf("dropping redirected message as backend ip [%v] is not exist", response.RedirectId)
 				}
@@ -318,14 +235,12 @@ func (b *backendNF) readFromServer() {
 					if ran != nil && response.GnbId != "" {
 						ran.SetRanId(response.GnbId)
 						context.Sctplb_Self().RanPool.Store(response.GnbId, ran)
-						// log.Printf("Received GnbId: %v for GNbIpAddress: %v from NF", response.GnbId, response.GnbIpAddr)
 					}
 				} else if response.GnbId != "" {
 					ran, _ = context.Sctplb_Self().RanFindByGnbId(response.GnbId)
 				}
 				if ran != nil {
 					ran.Conn.Write(response.Msg)
-					// log.Printf("T2: %v sctplb-to-RAN-out backend %v ", time.Now().Sub(start_time).Nanoseconds(), b.address)
 				} else {
 					log.Printf("Couldn't fetch sctp connection with GnbId: %v", response.GnbId)
 				}
@@ -378,10 +293,8 @@ func (b *backendNF) connectToServer() {
 			if err := stream.Send(&req); err != nil {
 				log.Println("can not send: ", err)
 			}
-			// log.Printf("Send Request message : %v", req)
 			response, err := stream.Recv()
 			if err != nil {
-				// log.Println("Response from server: error ", err)
 				b.state = false
 			} else {
 				log.Printf("Init Response from Server %s server: %s", response.AmfId, response.VerboseMsg)
@@ -397,8 +310,6 @@ func (b *backendNF) connectToServer() {
 	}
 }
 
-// func getAmfId(message *ngapType.NGAPPDU) *ngapType.AMFUENGAPID {
-// func getAmfId(message *ngapType.NGAPPDU) (*ngapType.AMFUENGAPID, *ngapType.FiveGSTMSI) {
 func getAmfId(message *ngapType.NGAPPDU) int64 {
 	var aMFUENGAPID *ngapType.AMFUENGAPID
 	var fiveGSTMSI *ngapType.FiveGSTMSI
@@ -425,12 +336,10 @@ func getAmfId(message *ngapType.NGAPPDU) int64 {
 			for i := 0; i < len(ngapMsg.ProtocolIEs.List); i++ {
 				ie := ngapMsg.ProtocolIEs.List[i]
 
-				// logger.SctpLog.Infof("initiatingMessage.Value.InitialUEMessage: ie.Id.Value %v", ie.Id.Value)
 				switch ie.Id.Value {
 				case ngapType.ProtocolIEIDNASPDU: // reject
 					nASPDU := []byte(ie.Value.NASPDU.Value)
 
-					// logger.SctpLog.Infof("ie.Value: %v", ie.Value.NASPDU)
 					msg := new(nas.Message)
 					msg.SecurityHeaderType = nas.GetSecurityHeaderType(nASPDU) & 0x0f
 					switch msg.SecurityHeaderType {
@@ -440,7 +349,6 @@ func getAmfId(message *ngapType.NGAPPDU) int64 {
 							return 0
 						}
 					case nas.SecurityHeaderTypePlainNas:
-						// logger.CommLog.Infof("Security header type: PlainNas Message")
 						if err := msg.PlainNasDecode(&nASPDU); err != nil {
 							return 0
 						}
@@ -448,27 +356,15 @@ func getAmfId(message *ngapType.NGAPPDU) int64 {
 						logger.SctpLog.Infof("Security header type is not plain or integrity protected")
 						return 0
 					}
-					// logger.SctpLog.Infof("msg: %v", msg)
-					// logger.SctpLog.Infof("msg.GmmHeader: %v", msg.GmmHeader)
 
 					if msg.GmmHeader.GetMessageType() == nas.MsgTypeServiceRequest {
 						mobileIdentity5GSContents := msg.ServiceRequest.TMSI5GS.Octet
 						if nasMessage.MobileIdentity5GSType5gSTmsi == nasConvert.GetTypeOfIdentity(mobileIdentity5GSContents[0]) {
-							// guti = StmsiToGuti(mobileIdentity5GSContents)
-							// tmsi := guti[12:]
 							buf := msg.ServiceRequest.TMSI5GS.Octet
-							// tmsi5G := hex.EncodeToString(buf[3:])
-							// logger.SctpLog.Infof("tmsi5G derived from Service Request Message: %v", tmsi5G)
-							// byteToInt, _ := strconv.Atoi(buf[3:])
 							byteToInt := binary.BigEndian.Uint32(buf[3:])
-							// logger.SctpLog.Infof("tmsi5G derived from Service Request Message (int): %v", byteToInt)
 							return int64(byteToInt)
 						}
-						// ran.Log.Trace("Decode IE NasPdu")
 					}
-					//  else {
-					// 	logger.SctpLog.Infof("msg.GmmHeader is not MsgTypeServiceRequest")
-					// }
 				case ngapType.ProtocolIEIDFiveGSTMSI: // optional, reject
 					fiveGSTMSI = ie.Value.FiveGSTMSI
 					logger.SctpLog.Infof("found ie.Value.FiveGSTMSI", ie.Value.FiveGSTMSI)
@@ -775,11 +671,7 @@ func getAmfId(message *ngapType.NGAPPDU) int64 {
 	return 0
 }
 
-// func dispatchMessage(conn net.Conn, msg []byte, start_time time.Time) { //*gClient.Message) {
-// func dispatchMessage(conn net.Conn, msg []byte) { //*gClient.Message) {
-func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.Message) {
-	// start_time := time.Now()
-	// log.Printf("%v sctplb-in", start_time)
+func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) {
 	// add this message for one of the client
 	// select server who can handle this message.. round robin
 	// add message in the server queue
@@ -788,7 +680,6 @@ func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.M
 	// Implement rate limit per gNb here
 	// implement per site rate limit here
 
-	// ran, _ := context.Sctplb_Self().RanFindByConn(conn)
 	if len(msg) == 0 {
 		var peer *SctpConnections
 		p, ok := connections.Load(conn)
@@ -797,7 +688,6 @@ func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.M
 			return
 		} else {
 			peer = p.(*SctpConnections)
-			//logger.SctpLog.Warnf("Handle SCTP Notification[addr: %+v], peer %v ", conn.RemoteAddr(), peer)
 		}
 		logger.SctpLog.Infof("send Gnb connection [%v] close message to all AMF Instances", peer)
 		t := gClient.SctplbMessage{}
@@ -808,12 +698,7 @@ func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.M
 			t.GnbId = ran.RanId
 		}
 		t.Msg = msg
-		// if backends != nil && len(backends) > 0 {
 		if len(backends) > 0 {
-			// var i int
-			// for ; i < len(backends); i++ {
-			// 	backend := backends[i]
-			// fmt.Println("dispatchMessage RLock")
 			backendsMutex.RLock()
 			for _, backend := range backends {
 				if backend.state == true {
@@ -823,7 +708,6 @@ func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.M
 				}
 			}
 			backendsMutex.RUnlock()
-			// fmt.Println("dispatchMessage RUnlock")
 		} else {
 			logger.SctpLog.Errorln("No AMF Connections")
 		}
@@ -831,9 +715,6 @@ func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.M
 		context.Sctplb_Self().DeleteRan(conn)
 		return
 	}
-	// if ran == nil {
-	// 	ran = context.Sctplb_Self().NewRan(conn)
-	// }
 	pdu, err := ngap.Decoder(msg)
 	if err != nil {
 		ran.Log.Errorf("NGAP decode error : %+v", err)
@@ -841,10 +722,8 @@ func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.M
 	}
 
 	var amfId int64 = 0
-	// aMFUENGAPID, fiveGSTMSI := getAmfId(pdu)
 	amfId = getAmfId(pdu)
 
-	// logger.SctpLog.Println("Message received from remoteAddr ", conn.RemoteAddr().String())
 	t := gClient.SctplbMessage{}
 	t.VerboseMsg = "Hello From gNB Message !"
 	t.Msgtype = gClient.MsgType_GNB_MSG
@@ -882,7 +761,6 @@ func dispatchMessage(conn net.Conn, msg []byte, ran *context.Ran) { //*gClient.M
 			}
 			backend.sendStreamLock.Unlock()
 
-			// log.Printf("T1: %v sctplb-to-AMF time difference backend %v ", time.Now().Sub(start_time).Nanoseconds(), backend.address)
 			break
 		}
 		log.Printf("should never hit this place\n")

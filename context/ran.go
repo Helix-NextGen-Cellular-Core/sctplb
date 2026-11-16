@@ -69,14 +69,6 @@ func (context *SctplbContext) RanFindByGnbId(gnbId string) (ran *Ran, ok bool) {
 	if value, ok := context.RanPool.Load(gnbId); ok {
 		return value.(*Ran), ok
 	}
-	// context.RanPool.Range(func(key, value interface{}) bool {
-	// 	candidate := value.(*Ran)
-	// 	if ok = (candidate.RanId == gnbId); ok {
-	// 		ran = candidate
-	// 		return false
-	// 	}
-	// 	return true
-	// })
 	return
 }
 
@@ -86,15 +78,6 @@ func (context *SctplbContext) RanFindByGnbIp(gnbIp string) (ran *Ran, ok bool) {
 		return value.(*Ran), ok
 	}
 	return nil, false
-	// context.RanPool.Range(func(key, value interface{}) bool {
-	// 	candidate := value.(*Ran)
-	// 	if ok = (candidate.GnbIp == gnbIp); ok {
-	// 		ran = candidate
-	// 		return false
-	// 	}
-	// 	return true
-	// })
-	// return
 }
 
 func (context *SctplbContext) DeleteRan(conn net.Conn) {
