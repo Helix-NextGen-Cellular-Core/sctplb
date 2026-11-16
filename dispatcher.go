@@ -60,7 +60,7 @@ func InitDrsm() (drsm.DrsmInterface, error) {
 	opt := &drsm.Options{ResIdSize: 24, Mode: drsm.ResourceDemux}
 	db := drsm.DbInfo{Url: dbUrl, Name: "sdcore_amf"}
 
-	return drsm.InitDRSM("amfid", podId, db, opt, 0)
+	return drsm.InitDRSM("amfid", podId, db, opt, 0) // 0 = default keepalive (5 s)
 }
 
 // returns the backendNF using RoundRobin algorithm
