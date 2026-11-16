@@ -4,7 +4,7 @@ go 1.18
 
 // replace github.com/omec-project/sctplb => ./
 
-replace github.com/omec-project/util => ../util
+replace github.com/omec-project/util => github.com/Helix-NextGen-Cellular-Core/util v1.0.0
 
 require (
 	git.cs.nctu.edu.tw/calee/sctp v1.1.0
